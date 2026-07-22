@@ -1,0 +1,54 @@
+// C-style variable declarations
+int x = 10
+dec y = 3.14
+str z = "hello"
+bool flag = true
+
+print(x + "\n")
+print(y + "\n")
+print(z + "\n")
+print(flag + "\n")
+
+// Dynamic arrays
+int nums[] = {1, 2, 3, 4, 5}
+print(nums + "\n")
+print(nums[2] + "\n")
+
+str words[] = {"apple", "banana", "cherry"}
+print(words[0] + "\n")
+
+// Functions with return values
+func int add(int a, int b) 
+{
+    return a + b
+}
+
+func str greet(str name) 
+{
+    return "Hello, " + name
+}
+
+int result = add(3, 7)
+print(result + "\n")
+print(greet("World") + "\n")
+
+// Loops
+int count = 0
+while (count < 3) {
+    print("While loop count: ")
+    print(count + "\n")
+    count = count + 1
+}
+
+for (int i = 0, i < 4, i = i + 1) {
+    print("For loop count: ")
+    print(i + "\n")
+}
+
+// Void-style function (no return)
+func int printLine(str msg) 
+{
+    print(msg)
+}
+
+printLine("Done!\n")
