@@ -102,8 +102,17 @@ std::string getName(std::string_view statement = "")
     return name;
 }
 
-std::string getValidFile()
+std::string getValidFile(int argc, char** argv)
 {
+    if (argc > 1)
+    {
+        std::string fileName{argv[1]};
+        std::ifstream filePath{fileName};
+        if (filePath.is_open())
+            return fileName;
+        std::cerr << "Error: Could not open file specified in arguments: " << fileName << "\n";
+    }
+
     while (true)
     {
         std::string fileName{getName("Enter your file path for cus language here (.txt): ")};
@@ -718,7 +727,11 @@ private:
         return std::runtime_error("Line " + std::to_string(peek().line) + ": " + message);
     }
 
-    void optionalSemicolon() { match(";"); }
+    void expectNoSemicolon()
+    {
+        if (check(";"))
+            throw error("semicolons are not allowed");
+    }
 
     DataType parseType()
     {
@@ -761,7 +774,7 @@ private:
 
     // Parses:  int x = expr;
     //          int x[] = {e1, e2, …};
-    std::unique_ptr<Stmt> declStatement(bool allowSemicolon)
+    std::unique_ptr<Stmt> declStatement(bool checkSemicolons)
     {
         const std::size_t line{peek().line};
         DataType type{parseType()};
@@ -791,8 +804,8 @@ private:
             // No initializer is also valid — will use defaultValue(type)
         }
 
-        if (allowSemicolon)
-            optionalSemicolon();
+        if (checkSemicolons)
+            expectNoSemicolon();
         return stmt;
     }
 
@@ -802,7 +815,7 @@ private:
         consume("(", "expected '(' after print");
         auto expr{expression()};
         consume(")", "expected ')' after print expression");
-        optionalSemicolon();
+        expectNoSemicolon();
         return std::make_unique<PrintStmt>(std::move(expr), line);
     }
 
@@ -871,14 +884,15 @@ private:
     {
         const std::size_t line{consume("return", "expected 'return'").line};
         std::unique_ptr<Expr> val{};
-        // If the next token is NOT ';' or '}' or EOF, parse an expression
-        if (!check(";") && !check("}") && !isAtEnd())
+        if (check(";"))
+            throw error("semicolons are not allowed");
+        if (!check("}") && !isAtEnd())
             val = expression();
-        optionalSemicolon();
+        expectNoSemicolon();
         return std::make_unique<ReturnStmt>(std::move(val), line);
     }
 
-    std::unique_ptr<Stmt> assignmentOrExpressionStatement(bool allowSemicolon)
+    std::unique_ptr<Stmt> assignmentOrExpressionStatement(bool checkSemicolons)
     {
         if (peek().type == TokenType::identifier)
         {
@@ -893,8 +907,8 @@ private:
             if (match("="))
             {
                 auto value{expression()};
-                if (allowSemicolon)
-                    optionalSemicolon();
+                if (checkSemicolons)
+                    expectNoSemicolon();
                 return std::make_unique<AssignStmt>(name.text, std::move(value), std::move(index), name.line);
             }
             current = saved;
@@ -902,8 +916,8 @@ private:
 
         const std::size_t line{peek().line};
         auto expr{expression()};
-        if (allowSemicolon)
-            optionalSemicolon();
+        if (checkSemicolons)
+            expectNoSemicolon();
         return std::make_unique<ExprStmt>(std::move(expr), line);
     }
 
@@ -1016,11 +1030,11 @@ std::string readWholeFile(const std::string& fileName)
     return buffer.str();
 }
 
-int main()
+int main(int argc, char** argv)
 {
     try
     {
-        const std::string fileName{getValidFile()};
+        const std::string fileName{getValidFile(argc, argv)};
         Parser parser{tokenize(readWholeFile(fileName))};
         auto program{parser.parse()};
 
