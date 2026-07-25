@@ -77,8 +77,10 @@ Conditional execution based on condition evaluation.
 ```custom
 if (x > 10) {
     print("Greater")
+else if (x == 10) {
+    print("Equal")
 } else {
-    print("Smaller or Equal")
+    print("Smaller")
 }
 ```
 
