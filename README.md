@@ -92,7 +92,11 @@ Conditional execution based on condition evaluation.
 ```custom
 if (x > 10) {
     print("Greater")
+<<<<<<< HEAD
 } else if (x == 10) {
+=======
+else if (x == 10) {
+>>>>>>> 030e557d98209847dbe8f60c4622e664d74144ef
     print("Equal")
 } else {
     print("Smaller")
