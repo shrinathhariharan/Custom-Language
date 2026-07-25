@@ -1,6 +1,6 @@
 # Custom Language
 
-A custom scripting language interpreter implemented in C++. It parses source code using a recursive descent parser into an Abstract Syntax Tree composed of C++ AST node objects (`Expr` and `Stmt`), which are then dynamically evaluated in a scoped environment.
+A custom interpreted language implemented in C++. It parses source code using a recursive descent parser into an Abstract Syntax Tree composed of C++ AST node objects (`Expr` and `Stmt`), which are then evaluated in a scoped environment. **Note: Semicolons will cause a parsing error.**
 
 ---
 
@@ -150,22 +150,28 @@ int x = 5 // Inline comment
 
 ---
 
-## Running the Interpreter
+## Building & Running the Interpreter
 
-Compile using any C++17 compatible compiler:
+### 1. Compilation
+Compile using any C++17 compatible compiler (e.g. `g++`):
 
 ```bash
-g++ -std=c++17 custom_language.cpp -o custom_language
+g++ -std=c++17 -Wall main.cpp lexer.cpp ast.cpp parser.cpp -o custom_language
 ```
 
-### Passing script file as command-line argument:
+### 2. Running
+
+#### Option A: Pass file directly in command
+You can easily copy and run the executable directly followed by your `.txt` file path:
+
 ```bash
-./custom_language example.txt
+./custom_language your_file.txt
 ```
 
-### Default prompt:
-If no argument is passed, the program prompts for the file path:
+#### Option B: Interactive prompt
+If you run the executable without arguments, it will prompt you for the file path:
+
 ```bash
 ./custom_language
-Enter your file path for cus language here (.txt): example.txt
+Enter your file path for custom language here (.txt): your_file.txt
 ```
