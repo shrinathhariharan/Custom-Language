@@ -49,11 +49,14 @@ print(numbers[0])
 numbers[1] = 42
 
 // Array member functions
-print(numbers.size())
-numbers.push(6)          // adds to the end
-int last = numbers.pop() // removes and returns the last item
-numbers.insert(1, 99)    // inserts item 99 at index 1
+print(numbers.size())       // 5: returns the current item count
+numbers.push(6)             // appends 6; returns the new size
+numbers.insert(1, 99)       // inserts 99 at index 1; returns the new size
+int last = numbers.pop()    // removes and returns the last item (6)
+print(numbers)              // [1, 99, 42, 3, 4, 5]
 ```
+
+`push` and `insert` accept an item matching the array's declared type. `pop` reports an error when used on an empty array, and `insert` accepts indexes from `0` through `arr.size()` (inclusive).
 
 ---
 
@@ -68,6 +71,18 @@ Supported arithmetic, comparison, logical, and string operations with standard o
 * **Compound Assignment Operators**: `+=`, `-=`, `*=`, `/=` (also supported for array elements)
 * **Parentheses**: `(` and `)` for overriding operator precedence.
 
+```custom
+int score = 10
+score += 5       // 15
+score *= 2       // 30
+
+int values[] = {4, 8}
+values[1] /= 2   // [4, 4]
+
+bool allowed = score >= 30 && !false
+bool fallback = false || allowed
+```
+
 ---
 
 ### 5. Control Flow Statements
@@ -77,8 +92,10 @@ Conditional execution based on condition evaluation.
 ```custom
 if (x > 10) {
     print("Greater")
+} else if (x == 10) {
+    print("Equal")
 } else {
-    print("Smaller or Equal")
+    print("Smaller")
 }
 ```
 
@@ -88,14 +105,14 @@ Loops as long as the condition evaluates to `true`.
 int count = 0
 while (count < 5) {
     print(count)
-    count = count + 1
+    count += 1
 }
 ```
 
 #### `for` Loops
 Standard 3-part `for` loop syntax with comma separators: `for (initializer, condition, increment) { ... }`
 ```custom
-for (int i = 0, i < 5, i = i + 1) {
+for (int i = 0, i < 5, i += 1) {
     print(i)
 }
 ```
