@@ -131,7 +131,7 @@ print("Hello, " + name)
 ---
 
 ### 8. Comments & Syntax Rules
-* **No Semicolons**: Semicolons (`;`) are strictly prohibited and will trigger a compiler error if present.
+* **No Semicolons**: Semicolons (`;`) will throw a compiler error if present.
 * **Single-line Comments**: Start with `//` and ignore all subsequent characters on that line.
 
 ```custom
