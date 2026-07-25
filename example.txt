@@ -14,8 +14,34 @@ int nums[] = {1, 2, 3, 4, 5}
 print(nums + "\n")
 print(nums[2] + "\n")
 
+// Compound assignment (also works on array items)
+x += 5
+y *= 2
+nums[0] += 10
+print("x after +=: " + x + "\n")
+print("y after *=: " + y + "\n")
+print("first number after +=: " + nums[0] + "\n")
+
+// Array member functions
+print("array size: " + nums.size() + "\n")
+nums.push(6)
+nums.insert(1, 99) // insert takes (index, item)
+print("after push and insert: " + nums + "\n")
+int removed = nums.pop()
+print("popped item: " + removed + "\n")
+print("array size after pop: " + nums.size() + "\n")
+
 str words[] = {"apple", "banana", "cherry"}
 print(words[0] + "\n")
+
+// Logical operators and else-if blocks
+if (flag && nums.size() > 0) {
+    print("The array has items and flag is true\n")
+} else if (!flag || nums.size() == 0) {
+    print("Flag is false or the array is empty\n")
+} else {
+    print("This branch will not run for the current values\n")
+}
 
 // Interactive input
 str user_name = input("Enter your name: ")
@@ -41,10 +67,10 @@ int count = 0
 while (count < 3) {
     print("While loop count: ")
     print(count + "\n")
-    count = count + 1
+    count += 1
 }
 
-for (int i = 0, i < 4, i = i + 1) {
+for (int i = 0, i < 4, i += 1) {
     print("For loop count: ")
     print(i + "\n")
 }

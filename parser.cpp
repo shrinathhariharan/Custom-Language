@@ -146,10 +146,10 @@ std::unique_ptr<Stmt> Parser::ifStatement()
     auto condition{expression()};
     consume(")", "expected ')' after if condition");
     auto thenBlock{block()};
-    std::unique_ptr<BlockStmt> elseBlock{};
+    std::unique_ptr<Stmt> elseBranch{};
     if (match("else"))
-        elseBlock = block();
-    return std::make_unique<IfStmt>(std::move(condition), std::move(thenBlock), std::move(elseBlock), line);
+        elseBranch = check("if") ? ifStatement() : block();
+    return std::make_unique<IfStmt>(std::move(condition), std::move(thenBlock), std::move(elseBranch), line);
 }
 
 std::unique_ptr<Stmt> Parser::whileStatement()
@@ -221,12 +221,13 @@ std::unique_ptr<Stmt> Parser::assignmentOrExpressionStatement(bool checkSemicolo
             index = expression();
             consume("]", "expected ']' after array index");
         }
-        if (match("="))
+        if (match("=") || match("+=") || match("-=") || match("*=") || match("/="))
         {
+            const std::string op{previous().text};
             auto value{expression()};
             if (checkSemicolons)
                 expectNoSemicolon();
-            return std::make_unique<AssignStmt>(name.text, std::move(value), std::move(index), name.line);
+            return std::make_unique<AssignStmt>(name.text, op, std::move(value), std::move(index), name.line);
         }
         current = saved;
     }
@@ -238,7 +239,29 @@ std::unique_ptr<Stmt> Parser::assignmentOrExpressionStatement(bool checkSemicolo
     return std::make_unique<ExprStmt>(std::move(expr), line);
 }
 
-std::unique_ptr<Expr> Parser::expression() { return equality(); }
+std::unique_ptr<Expr> Parser::expression() { return logicalOr(); }
+
+std::unique_ptr<Expr> Parser::logicalOr()
+{
+    auto expr{logicalAnd()};
+    while (match("||"))
+    {
+        const std::string op{previous().text};
+        expr = std::make_unique<BinaryExpr>(std::move(expr), op, logicalAnd(), previous().line);
+    }
+    return expr;
+}
+
+std::unique_ptr<Expr> Parser::logicalAnd()
+{
+    auto expr{equality()};
+    while (match("&&"))
+    {
+        const std::string op{previous().text};
+        expr = std::make_unique<BinaryExpr>(std::move(expr), op, equality(), previous().line);
+    }
+    return expr;
+}
 
 std::unique_ptr<Expr> Parser::equality()
 {
@@ -286,8 +309,11 @@ std::unique_ptr<Expr> Parser::factor()
 
 std::unique_ptr<Expr> Parser::unary()
 {
-    if (match("-"))
-        return std::make_unique<UnaryExpr>("-", unary(), previous().line);
+    if (match("-") || match("!"))
+    {
+        const Token op{previous()};
+        return std::make_unique<UnaryExpr>(op.text, unary(), op.line);
+    }
     return primary();
 }
 
@@ -326,6 +352,19 @@ std::unique_ptr<Expr> Parser::primary()
             auto index{expression()};
             consume("]", "expected ']' after array index");
             return std::make_unique<ArrayAccessExpr>(token.text, std::move(index), token.line);
+        }
+        if (match("."))
+        {
+            const Token method{consumeIdentifier("expected array method name after '.'")};
+            consume("(", "expected '(' after array method name");
+            std::vector<std::unique_ptr<Expr>> args{};
+            if (!check(")"))
+            {
+                do { args.push_back(expression()); }
+                while (match(","));
+            }
+            consume(")", "expected ')' after array method arguments");
+            return std::make_unique<ArrayMethodCallExpr>(token.text, method.text, std::move(args), token.line);
         }
         return std::make_unique<VariableExpr>(token.text, token.line);
     }

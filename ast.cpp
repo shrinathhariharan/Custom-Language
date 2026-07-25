@@ -164,12 +164,18 @@ Value UnaryExpr::eval(Environment& env) const
 {
     if (op == "-")
         return -valueToNumber(right->eval(env));
+    if (op == "!")
+        return !valueToBool(right->eval(env));
     throw std::runtime_error("Line " + std::to_string(line) + ": unknown unary operator");
 }
 
 Value BinaryExpr::eval(Environment& env) const
 {
     const Value a{left->eval(env)};
+    if (op == "&&")
+        return valueToBool(a) && valueToBool(right->eval(env));
+    if (op == "||")
+        return valueToBool(a) || valueToBool(right->eval(env));
     const Value b{right->eval(env)};
 
     if (op == "+")
@@ -189,6 +195,61 @@ Value BinaryExpr::eval(Environment& env) const
     if (op == "==") return valueToString(a) == valueToString(b);
     if (op == "!=") return valueToString(a) != valueToString(b);
     throw std::runtime_error("Line " + std::to_string(line) + ": unknown binary operator");
+}
+
+Value ArrayMethodCallExpr::eval(Environment& env) const
+{
+    Value& array{env.get(arrayName)};
+    auto requireArgs = [this](std::size_t count) {
+        if (args.size() != count)
+            throw std::runtime_error("Line " + std::to_string(line) + ": " + method + " expects " + std::to_string(count) + " argument(s)");
+    };
+
+    return std::visit([&](auto& values) -> Value {
+        using T = std::decay_t<decltype(values)>;
+        if constexpr (std::is_same_v<T, std::vector<int>> || std::is_same_v<T, std::vector<double>> ||
+                      std::is_same_v<T, std::vector<std::string>> || std::is_same_v<T, std::vector<bool>>)
+        {
+            using Element = typename T::value_type;
+            if (method == "size")
+            {
+                requireArgs(0);
+                return static_cast<int>(values.size());
+            }
+            if (method == "push")
+            {
+                requireArgs(1);
+                if constexpr (std::is_same_v<Element, int>) values.push_back(std::get<int>(castToType(DataType::t_int, args[0]->eval(env))));
+                else if constexpr (std::is_same_v<Element, double>) values.push_back(std::get<double>(castToType(DataType::t_dec, args[0]->eval(env))));
+                else if constexpr (std::is_same_v<Element, std::string>) values.push_back(std::get<std::string>(castToType(DataType::t_str, args[0]->eval(env))));
+                else values.push_back(std::get<bool>(castToType(DataType::t_bool, args[0]->eval(env))));
+                return static_cast<int>(values.size());
+            }
+            if (method == "pop")
+            {
+                requireArgs(0);
+                if (values.empty()) throw std::runtime_error("Line " + std::to_string(line) + ": cannot pop an empty array");
+                const Value result{values.back()};
+                values.pop_back();
+                return result;
+            }
+            if (method == "insert")
+            {
+                requireArgs(2);
+                const int index{static_cast<int>(valueToNumber(args[0]->eval(env)))};
+                if (index < 0 || static_cast<std::size_t>(index) > values.size())
+                    throw std::runtime_error("Line " + std::to_string(line) + ": array insertion index out of bounds");
+                if constexpr (std::is_same_v<Element, int>) values.insert(values.begin() + index, std::get<int>(castToType(DataType::t_int, args[1]->eval(env))));
+                else if constexpr (std::is_same_v<Element, double>) values.insert(values.begin() + index, std::get<double>(castToType(DataType::t_dec, args[1]->eval(env))));
+                else if constexpr (std::is_same_v<Element, std::string>) values.insert(values.begin() + index, std::get<std::string>(castToType(DataType::t_str, args[1]->eval(env))));
+                else values.insert(values.begin() + index, std::get<bool>(castToType(DataType::t_bool, args[1]->eval(env))));
+                return static_cast<int>(values.size());
+            }
+            throw std::runtime_error("Line " + std::to_string(line) + ": unknown array method: " + method);
+        }
+        else
+            throw std::runtime_error("Line " + std::to_string(line) + ": variable is not an array");
+    }, array);
 }
 
 Value FunctionCallExpr::eval(Environment& env) const
@@ -258,9 +319,16 @@ void ReturnStmt::exec(Environment& env) const
 void AssignStmt::exec(Environment& env) const
 {
     Value& target{env.get(name)};
+    const Value assigned{value->eval(env)};
+    auto apply = [&](const Value& current) -> Value {
+        if (op == "=") return assigned;
+        const std::string binaryOp{op.substr(0, 1)};
+        return BinaryExpr{std::make_unique<LiteralExpr>(current, line), binaryOp,
+                          std::make_unique<LiteralExpr>(assigned, line), line}.eval(env);
+    };
     if (!index)
     {
-        target = value->eval(env);
+        target = apply(target);
         return;
     }
 
@@ -273,22 +341,22 @@ void AssignStmt::exec(Environment& env) const
         if constexpr (std::is_same_v<T, std::vector<int>>)
         {
             if (static_cast<std::size_t>(idx) >= arg.size()) throw std::runtime_error("Line " + std::to_string(line) + ": array index out of bounds");
-            arg[static_cast<std::size_t>(idx)] = std::get<int>(castToType(DataType::t_int, value->eval(env)));
+            arg[static_cast<std::size_t>(idx)] = std::get<int>(castToType(DataType::t_int, apply(arg[static_cast<std::size_t>(idx)])));
         }
         else if constexpr (std::is_same_v<T, std::vector<double>>)
         {
             if (static_cast<std::size_t>(idx) >= arg.size()) throw std::runtime_error("Line " + std::to_string(line) + ": array index out of bounds");
-            arg[static_cast<std::size_t>(idx)] = std::get<double>(castToType(DataType::t_dec, value->eval(env)));
+            arg[static_cast<std::size_t>(idx)] = std::get<double>(castToType(DataType::t_dec, apply(arg[static_cast<std::size_t>(idx)])));
         }
         else if constexpr (std::is_same_v<T, std::vector<std::string>>)
         {
             if (static_cast<std::size_t>(idx) >= arg.size()) throw std::runtime_error("Line " + std::to_string(line) + ": array index out of bounds");
-            arg[static_cast<std::size_t>(idx)] = std::get<std::string>(castToType(DataType::t_str, value->eval(env)));
+            arg[static_cast<std::size_t>(idx)] = std::get<std::string>(castToType(DataType::t_str, apply(arg[static_cast<std::size_t>(idx)])));
         }
         else if constexpr (std::is_same_v<T, std::vector<bool>>)
         {
             if (static_cast<std::size_t>(idx) >= arg.size()) throw std::runtime_error("Line " + std::to_string(line) + ": array index out of bounds");
-            arg[static_cast<std::size_t>(idx)] = std::get<bool>(castToType(DataType::t_bool, value->eval(env)));
+            arg[static_cast<std::size_t>(idx)] = std::get<bool>(castToType(DataType::t_bool, apply(arg[static_cast<std::size_t>(idx)])));
         }
         else
             throw std::runtime_error("Line " + std::to_string(line) + ": variable is not an array");
@@ -309,8 +377,8 @@ void IfStmt::exec(Environment& env) const
 {
     if (valueToBool(condition->eval(env)))
         thenBlock->exec(env);
-    else if (elseBlock)
-        elseBlock->exec(env);
+    else if (elseBranch)
+        elseBranch->exec(env);
 }
 
 void WhileStmt::exec(Environment& env) const

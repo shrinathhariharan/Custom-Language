@@ -35,7 +35,8 @@ std::vector<Token> tokenize(const std::string& source)
             };
             tokens.push_back({std::find(keywords.begin(), keywords.end(), text) == keywords.end() ? TokenType::identifier : TokenType::keyword, text, line});
         }
-        else if (std::isdigit(static_cast<unsigned char>(c)) || c == '.')
+        else if (std::isdigit(static_cast<unsigned char>(c)) ||
+                 (c == '.' && i + 1 < source.size() && std::isdigit(static_cast<unsigned char>(source[i + 1]))))
         {
             std::string text{};
             bool sawDot{false};
@@ -85,7 +86,9 @@ std::vector<Token> tokenize(const std::string& source)
             if (i + 1 < source.size())
             {
                 const std::string two{source.substr(i, 2)};
-                if (two == "==" || two == "!=" || two == ">=" || two == "<=")
+                if (two == "==" || two == "!=" || two == ">=" || two == "<=" ||
+                    two == "+=" || two == "-=" || two == "*=" || two == "/=" ||
+                    two == "&&" || two == "||")
                     text = two;
             }
             tokens.push_back({TokenType::symbol, text, line});

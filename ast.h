@@ -115,6 +115,18 @@ struct FunctionCallExpr : Expr
     Value eval(Environment& env) const override;
 };
 
+struct ArrayMethodCallExpr : Expr
+{
+    std::string arrayName{};
+    std::string method{};
+    std::vector<std::unique_ptr<Expr>> args{};
+
+    ArrayMethodCallExpr(std::string receiver, std::string methodName, std::vector<std::unique_ptr<Expr>> arguments, std::size_t lineNum)
+        : Expr{lineNum}, arrayName{std::move(receiver)}, method{std::move(methodName)}, args{std::move(arguments)} {}
+
+    Value eval(Environment& env) const override;
+};
+
 struct ReturnException
 {
     Value value{};
@@ -155,11 +167,12 @@ struct ReturnStmt : Stmt
 struct AssignStmt : Stmt
 {
     std::string name{};
+    std::string op{};
     std::unique_ptr<Expr> value{};
     std::unique_ptr<Expr> index{};
 
-    AssignStmt(std::string varName, std::unique_ptr<Expr> val, std::unique_ptr<Expr> idx, std::size_t lineNum)
-        : Stmt{lineNum}, name{std::move(varName)}, value{std::move(val)}, index{std::move(idx)} {}
+    AssignStmt(std::string varName, std::string assignmentOp, std::unique_ptr<Expr> val, std::unique_ptr<Expr> idx, std::size_t lineNum)
+        : Stmt{lineNum}, name{std::move(varName)}, op{std::move(assignmentOp)}, value{std::move(val)}, index{std::move(idx)} {}
 
     void exec(Environment& env) const override;
 };
@@ -182,10 +195,10 @@ struct IfStmt : Stmt
 {
     std::unique_ptr<Expr> condition{};
     std::unique_ptr<BlockStmt> thenBlock{};
-    std::unique_ptr<BlockStmt> elseBlock{};
+    std::unique_ptr<Stmt> elseBranch{};
 
-    IfStmt(std::unique_ptr<Expr> cond, std::unique_ptr<BlockStmt> thenBody, std::unique_ptr<BlockStmt> elseBody, std::size_t lineNum)
-        : Stmt{lineNum}, condition{std::move(cond)}, thenBlock{std::move(thenBody)}, elseBlock{std::move(elseBody)} {}
+    IfStmt(std::unique_ptr<Expr> cond, std::unique_ptr<BlockStmt> thenBody, std::unique_ptr<Stmt> elseBody, std::size_t lineNum)
+        : Stmt{lineNum}, condition{std::move(cond)}, thenBlock{std::move(thenBody)}, elseBranch{std::move(elseBody)} {}
 
     void exec(Environment& env) const override;
 };

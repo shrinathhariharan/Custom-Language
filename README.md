@@ -47,6 +47,12 @@ print(numbers[0])
 
 // Array Element Assignment
 numbers[1] = 42
+
+// Array member functions
+print(numbers.size())
+numbers.push(6)          // adds to the end
+int last = numbers.pop() // removes and returns the last item
+numbers.insert(1, 99)    // inserts item 99 at index 1
 ```
 
 ---
@@ -58,13 +64,15 @@ Supported arithmetic, comparison, logical, and string operations with standard o
   * String concatenation is automatically supported with `+` if either operand is a string (e.g., `"Value: " + 10`).
   * Division by zero returns `0.0` safely.
 * **Comparison Operators**: `>`, `<`, `>=`, `<=`, `==`, `!=`
+* **Logical Operators**: `&&`, `||`, `!` (short-circuiting)
+* **Compound Assignment Operators**: `+=`, `-=`, `*=`, `/=` (also supported for array elements)
 * **Parentheses**: `(` and `)` for overriding operator precedence.
 
 ---
 
 ### 5. Control Flow Statements
 
-#### `if` / `else` Statements
+#### `if` / `else if` / `else` Statements
 Conditional execution based on condition evaluation.
 ```custom
 if (x > 10) {
@@ -131,7 +139,7 @@ print("Hello, " + name)
 ---
 
 ### 8. Comments & Syntax Rules
-* **No Semicolons**: Semicolons (`;`) are strictly prohibited and will trigger a compiler error if present.
+* **No Semicolons**: Semicolons (`;`) will throw a compiler error if present.
 * **Single-line Comments**: Start with `//` and ignore all subsequent characters on that line.
 
 ```custom
