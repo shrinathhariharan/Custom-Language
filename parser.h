@@ -41,6 +41,7 @@ private:
     std::unique_ptr<Stmt> whileStatement();
     std::unique_ptr<Stmt> forStatement();
     std::unique_ptr<Stmt> functionStatement();
+    std::unique_ptr<Stmt> classStatement();
     std::unique_ptr<Stmt> returnStatement();
     std::unique_ptr<Stmt> assignmentOrExpressionStatement(bool checkSemicolons);
 

@@ -77,12 +77,24 @@ bool Parser::isTypeKeyword() const
 std::unique_ptr<Stmt> Parser::statement()
 {
     if (isTypeKeyword())  return declStatement(true);
+    if (peek().type == TokenType::identifier && current + 1 < tokens.size() && tokens[current + 1].type == TokenType::identifier)
+    {
+        const Token className{advance()};
+        const Token name{consumeIdentifier("expected variable name after class name")};
+        consume("=", "expected '=' after object variable name");
+        auto initializer{expression()};
+        expectNoSemicolon();
+        return std::make_unique<ObjectDeclStmt>(className.text, name.text, std::move(initializer), className.line);
+    }
     if (check("print"))   return printStatement();
     if (check("if"))      return ifStatement();
     if (check("while"))   return whileStatement();
     if (check("for"))     return forStatement();
     if (check("func"))    return functionStatement();
+    if (check("class"))   return classStatement();
     if (check("return"))  return returnStatement();
+    if (match("break")) { expectNoSemicolon(); return std::make_unique<BreakStmt>(previous().line); }
+    if (match("continue")) { expectNoSemicolon(); return std::make_unique<ContinueStmt>(previous().line); }
     if (check("{"))       return block();
     return assignmentOrExpressionStatement(true);
 }
@@ -177,7 +189,8 @@ std::unique_ptr<Stmt> Parser::forStatement()
 std::unique_ptr<Stmt> Parser::functionStatement()
 {
     const std::size_t line{consume("func", "expected 'func'").line};
-    if (isTypeKeyword())
+    const bool returnsVoid{match("void")};
+    if (!returnsVoid && isTypeKeyword())
         parseType();
     const std::string name{consumeIdentifier("expected function name after 'func'").text};
     consume("(", "expected '(' after function name");
@@ -194,7 +207,28 @@ std::unique_ptr<Stmt> Parser::functionStatement()
         while (match(","));
     }
     consume(")", "expected ')' after function parameters");
-    return std::make_unique<FunctionDefStmt>(name, std::move(params), block(), line);
+    return std::make_unique<FunctionDefStmt>(name, std::move(params), block(), line, returnsVoid);
+}
+
+std::unique_ptr<Stmt> Parser::classStatement()
+{
+    const std::size_t line{consume("class", "expected 'class'").line};
+    const std::string name{consumeIdentifier("expected class name").text};
+    consume("{", "expected '{' after class name");
+    auto result{std::make_unique<ClassDefStmt>(name, line)};
+    while (!check("}") && !isAtEnd())
+    {
+        if (isTypeKeyword()) { result->fields.emplace_back(static_cast<DeclStmt*>(declStatement(true).release())); continue; }
+        if (check("func")) { auto method{static_cast<FunctionDefStmt*>(functionStatement().release())}; result->methods.emplace(method->name, std::unique_ptr<FunctionDefStmt>{method}); continue; }
+        if (check(name))
+        {
+            advance(); consume("(", "expected '(' after constructor name"); std::vector<std::string> params{};
+            if (!check(")")) do { params.push_back(consumeIdentifier("expected constructor parameter").text); } while (match(","));
+            consume(")", "expected ')' after constructor parameters"); result->constructor = std::make_unique<FunctionDefStmt>(name, std::move(params), block(), line, true); continue;
+        }
+        throw error("expected a field, constructor, or method in class body");
+    }
+    consume("}", "expected '}' after class body"); return result;
 }
 
 std::unique_ptr<Stmt> Parser::returnStatement()
@@ -220,6 +254,11 @@ std::unique_ptr<Stmt> Parser::assignmentOrExpressionStatement(bool checkSemicolo
         {
             index = expression();
             consume("]", "expected ']' after array index");
+        }
+        if (match("."))
+        {
+            const Token member{consumeIdentifier("expected member name after '.'")};
+            if (match("=") || match("+=") || match("-=") || match("*=") || match("/=")) { const std::string op{previous().text}; auto value{expression()}; if (checkSemicolons) expectNoSemicolon(); return std::make_unique<MemberAssignStmt>(name.text, member.text, op, std::move(value), name.line); }
         }
         if (match("=") || match("+=") || match("-=") || match("*=") || match("/="))
         {
@@ -355,16 +394,17 @@ std::unique_ptr<Expr> Parser::primary()
         }
         if (match("."))
         {
-            const Token method{consumeIdentifier("expected array method name after '.'")};
-            consume("(", "expected '(' after array method name");
+            const Token member{consumeIdentifier("expected member name after '.'")};
             std::vector<std::unique_ptr<Expr>> args{};
-            if (!check(")"))
+            const bool isCall{match("(")};
+            if (isCall) { if (!check(")")) do { args.push_back(expression()); } while (match(",")); consume(")", "expected ')' after method arguments"); }
+            if (member.text == "size" || member.text == "push" || member.text == "pop" || member.text == "insert")
             {
-                do { args.push_back(expression()); }
-                while (match(","));
+                if (!isCall)
+                    throw error("array member requires '()'");
+                return std::make_unique<ArrayMethodCallExpr>(token.text, member.text, std::move(args), token.line);
             }
-            consume(")", "expected ')' after array method arguments");
-            return std::make_unique<ArrayMethodCallExpr>(token.text, method.text, std::move(args), token.line);
+            return std::make_unique<MemberExpr>(token.text, member.text, std::move(args), isCall, token.line);
         }
         return std::make_unique<VariableExpr>(token.text, token.line);
     }

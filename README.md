@@ -92,11 +92,7 @@ Conditional execution based on condition evaluation.
 ```custom
 if (x > 10) {
     print("Greater")
-<<<<<<< HEAD
 } else if (x == 10) {
-=======
-else if (x == 10) {
->>>>>>> 030e557d98209847dbe8f60c4622e664d74144ef
     print("Equal")
 } else {
     print("Smaller")
@@ -139,9 +135,36 @@ print(sum)
 * Functions create a new nested variable scope upon execution.
 * The `return` statement unwinds execution and returns a value to the caller.
 
+### 7. Classes and Objects
+
+Classes contain typed fields, an optional constructor named after the class, and methods. Create an object with `ClassName variable = ClassName(...)`. Fields beginning with `_` are private and can only be accessed through `self` inside a class method.
+
+```custom
+class Point {
+    int _x = 0
+    int _y = 0
+    int example = 0
+
+    Point(self, x, y) {
+        self._x = x
+        self._y = y
+    }
+
+    func void hello() {
+        print("Hello\n")
+    }
+}
+
+Point point = Point(3, 4)
+point.hello()
+point.example += 1
+```
+
+Use `func void` for a function or method that does not return a value.
+
 ---
 
-### 7. Built-in Functions
+### 8. Built-in Functions
 
 #### `print(...)`
 Prints the evaluated string representation of an expression to standard output.
@@ -159,7 +182,7 @@ print("Hello, " + name)
 
 ---
 
-### 8. Comments & Syntax Rules
+### 9. Comments & Syntax Rules
 * **No Semicolons**: Semicolons (`;`) will throw a compiler error if present.
 * **Single-line Comments**: Start with `//` and ignore all subsequent characters on that line.
 

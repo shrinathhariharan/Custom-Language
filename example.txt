@@ -43,6 +43,27 @@ if (flag && nums.size() > 0) {
     print("This branch will not run for the current values\n")
 }
 
+// Classes have public and private access methods, and member functions
+class Point {
+    int _x = 0
+    int _y = 0
+    int example = 0
+
+    Point(self, x, y) {
+        self._x = x
+        self._y = y
+    }
+
+    func void hello() {
+        print("Hello from Point\n")
+    }
+}
+
+Point point = Point(3, 4)
+point.example += 1
+point.hello()
+print("public field: " + point.example + "\n")
+
 // Interactive input
 str user_name = input("Enter your name: ")
 print("Hello, " + user_name + "\n")
@@ -75,8 +96,21 @@ for (int i = 0, i < 4, i += 1) {
     print(i + "\n")
 }
 
+// continue skips the rest of this iteration; break exits the loop
+int control = 0
+while (control < 6) {
+    control += 1
+    if (control == 2) {
+        continue
+    }
+    if (control == 5) {
+        break
+    }
+    print("Loop control: " + control + "\n")
+}
+
 // Void-style function (no return value)
-func int printLine(str msg) 
+func void printLine(str msg) 
 {
     print(msg)
 }

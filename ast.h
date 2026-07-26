@@ -17,7 +17,10 @@ enum class DataType
     t_bool,
 };
 
-using Value = std::variant<int, double, std::string, bool, std::vector<int>, std::vector<double>, std::vector<std::string>, std::vector<bool>>;
+struct Object;
+using ObjectPtr = std::shared_ptr<Object>;
+
+using Value = std::variant<int, double, std::string, bool, std::vector<int>, std::vector<double>, std::vector<std::string>, std::vector<bool>, ObjectPtr>;
 
 struct Environment;
 
@@ -38,11 +41,14 @@ struct Stmt
 };
 
 struct FunctionDefStmt;
+struct ClassDefStmt;
+struct Object { std::string className{}; std::unordered_map<std::string, Value> fields{}; };
 
 struct Environment
 {
     std::vector<std::unordered_map<std::string, Value>> scopes{{}};
     std::unordered_map<std::string, const FunctionDefStmt*> functions{};
+    std::unordered_map<std::string, const ClassDefStmt*> classes{};
 
     Value& get(const std::string& name);
     const Value& get(const std::string& name) const;
@@ -126,10 +132,26 @@ struct ArrayMethodCallExpr : Expr
 
     Value eval(Environment& env) const override;
 };
+struct MemberExpr : Expr { std::string object{}, member{}; std::vector<std::unique_ptr<Expr>> args{}; bool isCall{}; MemberExpr(std::string o, std::string m, std::vector<std::unique_ptr<Expr>> a, bool call, std::size_t l): Expr{l}, object{std::move(o)}, member{std::move(m)}, args{std::move(a)}, isCall{call} {} Value eval(Environment&) const override; };
 
 struct ReturnException
 {
     Value value{};
+};
+
+struct BreakException {};
+struct ContinueException {};
+
+struct BreakStmt : Stmt
+{
+    explicit BreakStmt(std::size_t lineNum) : Stmt{lineNum} {}
+    void exec(Environment&) const override { throw BreakException{}; }
+};
+
+struct ContinueStmt : Stmt
+{
+    explicit ContinueStmt(std::size_t lineNum) : Stmt{lineNum} {}
+    void exec(Environment&) const override { throw ContinueException{}; }
 };
 
 struct BlockStmt : Stmt
@@ -155,6 +177,16 @@ struct DeclStmt : Stmt
     void exec(Environment& env) const override;
 };
 
+struct ObjectDeclStmt : Stmt
+{
+    std::string className{};
+    std::string name{};
+    std::unique_ptr<Expr> initializer{};
+    ObjectDeclStmt(std::string typeName, std::string varName, std::unique_ptr<Expr> value, std::size_t lineNum)
+        : Stmt{lineNum}, className{std::move(typeName)}, name{std::move(varName)}, initializer{std::move(value)} {}
+    void exec(Environment& env) const override;
+};
+
 struct ReturnStmt : Stmt
 {
     std::unique_ptr<Expr> value{};
@@ -176,6 +208,7 @@ struct AssignStmt : Stmt
 
     void exec(Environment& env) const override;
 };
+struct MemberAssignStmt : Stmt { std::string object{}, member{}, op{}; std::unique_ptr<Expr> value{}; MemberAssignStmt(std::string o,std::string m,std::string p,std::unique_ptr<Expr> v,std::size_t l):Stmt{l},object{std::move(o)},member{std::move(m)},op{std::move(p)},value{std::move(v)}{} void exec(Environment&) const override; };
 
 struct PrintStmt : Stmt
 {
@@ -232,12 +265,14 @@ struct FunctionDefStmt : Stmt
     std::string name{};
     std::vector<std::string> params{};
     std::unique_ptr<BlockStmt> body{};
+    bool isVoid{};
 
-    FunctionDefStmt(std::string funcName, std::vector<std::string> parameters, std::unique_ptr<BlockStmt> funcBody, std::size_t lineNum)
-        : Stmt{lineNum}, name{std::move(funcName)}, params{std::move(parameters)}, body{std::move(funcBody)} {}
+    FunctionDefStmt(std::string funcName, std::vector<std::string> parameters, std::unique_ptr<BlockStmt> funcBody, std::size_t lineNum, bool returnsVoid = false)
+        : Stmt{lineNum}, name{std::move(funcName)}, params{std::move(parameters)}, body{std::move(funcBody)}, isVoid{returnsVoid} {}
 
     void exec(Environment& env) const override;
     Value call(Environment& env) const;
 };
+struct ClassDefStmt : Stmt { std::string name{}; std::vector<std::unique_ptr<DeclStmt>> fields{}; std::unique_ptr<FunctionDefStmt> constructor{}; std::unordered_map<std::string,std::unique_ptr<FunctionDefStmt>> methods{}; ClassDefStmt(std::string n,std::size_t l):Stmt{l},name{std::move(n)}{} void exec(Environment&) const override; };
 
 #endif // AST_H

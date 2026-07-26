@@ -63,6 +63,8 @@ std::string valueToString(const Value& value)
                 result.pop_back();
             return result;
         }
+        else if constexpr (std::is_same_v<T, ObjectPtr>)
+            return "<" + arg->className + ">";
         else
         {
             std::string result{"["};
@@ -106,6 +108,7 @@ bool valueToBool(const Value& value)
             return arg != 0;
         else if constexpr (std::is_same_v<T, std::string>)
             return !arg.empty();
+        else if constexpr (std::is_same_v<T, ObjectPtr>) return true;
         else
             return !arg.empty();
     }, value);
@@ -263,6 +266,20 @@ Value FunctionCallExpr::eval(Environment& env) const
         return input;
     }
 
+    std::vector<Value> values{}; for (const auto& arg : args) values.push_back(arg->eval(env));
+    if (auto classFound{env.classes.find(name)}; classFound != env.classes.end())
+    {
+        const auto* definition{classFound->second}; auto object{std::make_shared<Object>()}; object->className = name;
+        for (const auto& field : definition->fields) object->fields[field->name] = field->initializer ? castToType(field->type, field->initializer->eval(env)) : defaultValue(field->type);
+        if (definition->constructor)
+        {
+            if (definition->constructor->params.size() != values.size() + 1) throw std::runtime_error("Line " + std::to_string(line) + ": wrong constructor argument count");
+            env.scopes.push_back({}); env.declare(definition->constructor->params[0], object, line);
+            for (std::size_t i{0}; i < values.size(); ++i) env.declare(definition->constructor->params[i + 1], values[i], line);
+            definition->constructor->call(env);
+        }
+        return object;
+    }
     auto found{env.functions.find(name)};
     if (found == env.functions.end())
         throw std::runtime_error("Line " + std::to_string(line) + ": unknown function: " + name);
@@ -273,15 +290,39 @@ Value FunctionCallExpr::eval(Environment& env) const
 
     env.scopes.push_back({});
     for (std::size_t i{0}; i < args.size(); ++i)
-        env.declare(function->params[i], args[i]->eval(env), line);
+        env.declare(function->params[i], values[i], line);
     return function->call(env);
+}
+
+Value MemberExpr::eval(Environment& env) const
+{
+    const Value& receiver{env.get(object)}; if (!std::holds_alternative<ObjectPtr>(receiver)) throw std::runtime_error("Line " + std::to_string(line) + ": member access requires an object");
+    const auto instance{std::get<ObjectPtr>(receiver)}; if (!member.empty() && member.front() == '_' && object != "self") throw std::runtime_error("Line " + std::to_string(line) + ": private field: " + member);
+    if (!isCall) { auto field{instance->fields.find(member)}; if (field == instance->fields.end()) throw std::runtime_error("unknown field: " + member); return field->second; }
+    const auto* definition{env.classes.at(instance->className)}; auto method{definition->methods.find(member)}; if (method == definition->methods.end()) throw std::runtime_error("unknown method: " + member);
+    if (method->second->params.size() != args.size()) throw std::runtime_error("wrong argument count for method: " + member);
+    std::vector<Value> values{}; for (const auto& arg: args) values.push_back(arg->eval(env)); env.scopes.push_back({}); env.declare("self", instance, line); for (std::size_t i{}; i < values.size(); ++i) env.declare(method->second->params[i], values[i], line); return method->second->call(env);
+}
+
+void MemberAssignStmt::exec(Environment& env) const
+{
+    Value& receiver{env.get(object)}; if (!std::holds_alternative<ObjectPtr>(receiver)) throw std::runtime_error("Line " + std::to_string(line) + ": member assignment requires an object"); if (!member.empty() && member.front() == '_' && object != "self") throw std::runtime_error("Line " + std::to_string(line) + ": private field: " + member);
+    Value& target{std::get<ObjectPtr>(receiver)->fields.at(member)}; const Value assigned{value->eval(env)}; if (op == "=") { target = assigned; return; } target = BinaryExpr{std::make_unique<LiteralExpr>(target,line),op.substr(0,1),std::make_unique<LiteralExpr>(assigned,line),line}.eval(env);
 }
 
 void BlockStmt::exec(Environment& env) const
 {
     env.scopes.push_back({});
-    for (const auto& statement : statements)
-        statement->exec(env);
+    try
+    {
+        for (const auto& statement : statements)
+            statement->exec(env);
+    }
+    catch (...)
+    {
+        env.scopes.pop_back();
+        throw;
+    }
     env.scopes.pop_back();
 }
 
@@ -309,6 +350,16 @@ void DeclStmt::exec(Environment& env) const
     case DataType::t_str:  env.declare(name, buildVec(std::string{}), line); break;
     case DataType::t_bool: env.declare(name, buildVec(bool{}),        line); break;
     }
+}
+
+void ObjectDeclStmt::exec(Environment& env) const
+{
+    if (env.classes.find(className) == env.classes.end())
+        throw std::runtime_error("Line " + std::to_string(line) + ": unknown class: " + className);
+    Value object{initializer->eval(env)};
+    if (!std::holds_alternative<ObjectPtr>(object) || std::get<ObjectPtr>(object)->className != className)
+        throw std::runtime_error("Line " + std::to_string(line) + ": expected a " + className + " object");
+    env.declare(name, std::move(object), line);
 }
 
 void ReturnStmt::exec(Environment& env) const
@@ -384,7 +435,11 @@ void IfStmt::exec(Environment& env) const
 void WhileStmt::exec(Environment& env) const
 {
     while (valueToBool(condition->eval(env)))
-        body->exec(env);
+    {
+        try { body->exec(env); }
+        catch (const ContinueException&) { continue; }
+        catch (const BreakException&) { break; }
+    }
 }
 
 void ForStmt::exec(Environment& env) const
@@ -393,7 +448,9 @@ void ForStmt::exec(Environment& env) const
     initializer->exec(env);
     while (valueToBool(condition->eval(env)))
     {
-        body->exec(env);
+        try { body->exec(env); }
+        catch (const ContinueException&) { increment->exec(env); continue; }
+        catch (const BreakException&) { break; }
         increment->exec(env);
     }
     env.scopes.pop_back();
@@ -403,6 +460,8 @@ void FunctionDefStmt::exec(Environment& env) const
 {
     env.functions[name] = this;
 }
+
+void ClassDefStmt::exec(Environment& env) const { env.classes[name] = this; }
 
 Value FunctionDefStmt::call(Environment& env) const
 {
