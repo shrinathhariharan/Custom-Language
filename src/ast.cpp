@@ -1,5 +1,13 @@
 #include "ast.h"
+#include "lexer.h"
+#include "parser.h"
+#include "stdlib.h"
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <type_traits>
 
@@ -32,6 +40,16 @@ void Environment::declare(const std::string& name, Value value, std::size_t line
     scopes.back().emplace(name, std::move(value));
 }
 
+bool Environment::hasVar(const std::string& name) const
+{
+    for (auto scope{scopes.rbegin()}; scope != scopes.rend(); ++scope)
+    {
+        if (scope->find(name) != scope->end())
+            return true;
+    }
+    return false;
+}
+
 std::string typeName(DataType type)
 {
     switch (type)
@@ -42,6 +60,19 @@ std::string typeName(DataType type)
     case DataType::t_bool: return "bool";
     }
     return "unknown";
+}
+
+std::string valueTypeName(const Value& value)
+{
+    return std::visit([](auto&& arg) -> std::string {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, int>)               return "int";
+        else if constexpr (std::is_same_v<T, double>)        return "dec";
+        else if constexpr (std::is_same_v<T, std::string>)   return "str";
+        else if constexpr (std::is_same_v<T, bool>)          return "bool";
+        else if constexpr (std::is_same_v<T, ObjectPtr>)     return arg->className;
+        else return "array";
+    }, value);
 }
 
 std::string valueToString(const Value& value)
@@ -208,6 +239,39 @@ Value ArrayMethodCallExpr::eval(Environment& env) const
             throw std::runtime_error("Line " + std::to_string(line) + ": " + method + " expects " + std::to_string(count) + " argument(s)");
     };
 
+    if (std::holds_alternative<std::string>(array))
+    {
+        const std::string& value{std::get<std::string>(array)};
+        if (method == "size" || method == "length")
+        {
+            requireArgs(0);
+            return static_cast<int>(value.size());
+        }
+        if (method == "find")
+        {
+            requireArgs(1);
+            const std::string substring{std::get<std::string>(castToType(DataType::t_str, args[0]->eval(env)))};
+            const std::size_t position{value.find(substring)};
+            return position == std::string::npos ? -1 : static_cast<int>(position);
+        }
+        if (method == "contains")
+        {
+            requireArgs(1);
+            const std::string substring{std::get<std::string>(castToType(DataType::t_str, args[0]->eval(env)))};
+            return value.find(substring) != std::string::npos;
+        }
+        if (method == "lower" || method == "upper")
+        {
+            requireArgs(0);
+            std::string transformed{value};
+            std::transform(transformed.begin(), transformed.end(), transformed.begin(), [this](unsigned char c) {
+                return static_cast<char>(method == "lower" ? std::tolower(c) : std::toupper(c));
+            });
+            return transformed;
+        }
+        throw std::runtime_error("Line " + std::to_string(line) + ": unknown string method: " + method);
+    }
+
     return std::visit([&](auto& values) -> Value {
         using T = std::decay_t<decltype(values)>;
         if constexpr (std::is_same_v<T, std::vector<int>> || std::is_same_v<T, std::vector<double>> ||
@@ -248,6 +312,20 @@ Value ArrayMethodCallExpr::eval(Environment& env) const
                 else values.insert(values.begin() + index, std::get<bool>(castToType(DataType::t_bool, args[1]->eval(env))));
                 return static_cast<int>(values.size());
             }
+            if (method == "remove")
+            {
+                requireArgs(1);
+                Element target{};
+                if constexpr (std::is_same_v<Element, int>) target = std::get<int>(castToType(DataType::t_int, args[0]->eval(env)));
+                else if constexpr (std::is_same_v<Element, double>) target = std::get<double>(castToType(DataType::t_dec, args[0]->eval(env)));
+                else if constexpr (std::is_same_v<Element, std::string>) target = std::get<std::string>(castToType(DataType::t_str, args[0]->eval(env)));
+                else target = std::get<bool>(castToType(DataType::t_bool, args[0]->eval(env)));
+
+                auto it = std::find(values.begin(), values.end(), target);
+                if (it != values.end())
+                    values.erase(it);
+                return static_cast<int>(values.size());
+            }
             throw std::runtime_error("Line " + std::to_string(line) + ": unknown array method: " + method);
         }
         else
@@ -266,10 +344,56 @@ Value FunctionCallExpr::eval(Environment& env) const
         return input;
     }
 
-    std::vector<Value> values{}; for (const auto& arg : args) values.push_back(arg->eval(env));
-    if (auto classFound{env.classes.find(name)}; classFound != env.classes.end())
+    if (name == "toInt" || name == "toDec" || name == "toStr" || name == "toBool")
     {
-        const auto* definition{classFound->second}; auto object{std::make_shared<Object>()}; object->className = name;
+        if (args.size() != 1)
+            throw std::runtime_error("Line " + std::to_string(line) + ": " + name + " expects exactly 1 argument");
+        const Value arg{args[0]->eval(env)};
+        if (name == "toInt")  return static_cast<int>(valueToNumber(arg));
+        if (name == "toDec")  return valueToNumber(arg);
+        if (name == "toStr")  return valueToString(arg);
+        if (name == "toBool") return valueToBool(arg);
+    }
+
+    if (name == "type")
+    {
+        if (args.size() != 1)
+            throw std::runtime_error("Line " + std::to_string(line) + ": type() expects exactly 1 argument");
+        return valueTypeName(args[0]->eval(env));
+    }
+
+    // Check for standard library functions (e.g., math.pow, math.abs)
+    size_t dotPos = name.find('.');
+    if (dotPos != std::string::npos) {
+        std::string moduleName = name.substr(0, dotPos);
+        std::string funcName = name.substr(dotPos + 1);
+
+        if (StandardLibrary::instance().hasModule(moduleName)) {
+            auto moduleIt = StandardLibrary::instance().getModules().find(moduleName);
+            if (moduleIt != StandardLibrary::instance().getModules().end()) {
+                auto funcIt = moduleIt->second.find(funcName);
+                if (funcIt != moduleIt->second.end()) {
+                    // Found the standard library function
+                    std::vector<Value> values{};
+                    for (const auto& arg : args) values.push_back(arg->eval(env));
+                    return funcIt->second(values);
+                }
+            }
+        }
+    }
+
+    std::vector<Value> values{}; for (const auto& arg : args) values.push_back(arg->eval(env));
+    std::string lookupName = name;
+    if (env.classes.find(lookupName) == env.classes.end() && env.functions.find(lookupName) == env.functions.end() && !env.currentModule.empty())
+    {
+        if (env.classes.find(env.currentModule + "." + name) != env.classes.end())
+            lookupName = env.currentModule + "." + name;
+        else if (env.functions.find(env.currentModule + "." + name) != env.functions.end())
+            lookupName = env.currentModule + "." + name;
+    }
+    if (auto classFound{env.classes.find(lookupName)}; classFound != env.classes.end())
+    {
+        const auto* definition{classFound->second}; auto object{std::make_shared<Object>()}; object->className = lookupName;
         for (const auto& field : definition->fields) object->fields[field->name] = field->initializer ? castToType(field->type, field->initializer->eval(env)) : defaultValue(field->type);
         if (definition->constructor)
         {
@@ -280,7 +404,7 @@ Value FunctionCallExpr::eval(Environment& env) const
         }
         return object;
     }
-    auto found{env.functions.find(name)};
+    auto found{env.functions.find(lookupName)};
     if (found == env.functions.end())
         throw std::runtime_error("Line " + std::to_string(line) + ": unknown function: " + name);
 
@@ -296,18 +420,100 @@ Value FunctionCallExpr::eval(Environment& env) const
 
 Value MemberExpr::eval(Environment& env) const
 {
-    const Value& receiver{env.get(object)}; if (!std::holds_alternative<ObjectPtr>(receiver)) throw std::runtime_error("Line " + std::to_string(line) + ": member access requires an object");
-    const auto instance{std::get<ObjectPtr>(receiver)}; if (!member.empty() && member.front() == '_' && object != "self") throw std::runtime_error("Line " + std::to_string(line) + ": private field: " + member);
-    if (!isCall) { auto field{instance->fields.find(member)}; if (field == instance->fields.end()) throw std::runtime_error("unknown field: " + member); return field->second; }
-    const auto* definition{env.classes.at(instance->className)}; auto method{definition->methods.find(member)}; if (method == definition->methods.end()) throw std::runtime_error("unknown method: " + member);
-    if (method->second->params.size() != args.size()) throw std::runtime_error("wrong argument count for method: " + member);
-    std::vector<Value> values{}; for (const auto& arg: args) values.push_back(arg->eval(env)); env.scopes.push_back({}); env.declare("self", instance, line); for (std::size_t i{}; i < values.size(); ++i) env.declare(method->second->params[i], values[i], line); return method->second->call(env);
+    if (env.hasVar(object))
+    {
+        const Value& receiver{env.get(object)}; if (!std::holds_alternative<ObjectPtr>(receiver)) throw std::runtime_error("Line " + std::to_string(line) + ": member access requires an object");
+        const auto instance{std::get<ObjectPtr>(receiver)}; if (!member.empty() && member.front() == '_' && object != "self") throw std::runtime_error("Line " + std::to_string(line) + ": private field: " + member);
+        if (!isCall) { auto field{instance->fields.find(member)}; if (field == instance->fields.end()) throw std::runtime_error("unknown field: " + member); return field->second; }
+        const auto* definition{env.classes.at(instance->className)}; auto method{definition->methods.find(member)}; if (method == definition->methods.end()) throw std::runtime_error("unknown method: " + member);
+        if (method->second->params.size() != args.size()) throw std::runtime_error("wrong argument count for method: " + member);
+        std::vector<Value> values{}; for (const auto& arg: args) values.push_back(arg->eval(env)); env.scopes.push_back({}); env.declare("self", instance, line); for (std::size_t i{}; i < values.size(); ++i) env.declare(method->second->params[i], values[i], line); return method->second->call(env);
+    }
+
+    const std::string fullName{object + "." + member};
+    if (isCall)
+    {
+        auto funcIt{env.functions.find(fullName)};
+        if (funcIt != env.functions.end())
+        {
+            const FunctionDefStmt* function{funcIt->second};
+            if (function->params.size() != args.size())
+                throw std::runtime_error("Line " + std::to_string(line) + ": wrong argument count for function: " + fullName);
+            std::vector<Value> values{};
+            for (const auto& arg : args) values.push_back(arg->eval(env));
+            env.scopes.push_back({});
+            for (std::size_t i{0}; i < args.size(); ++i)
+                env.declare(function->params[i], values[i], line);
+            return function->call(env);
+        }
+
+        // Check if it's a standard library function (e.g., math.pow)
+        if (StandardLibrary::instance().hasModule(object)) {
+            auto moduleIt = StandardLibrary::instance().getModules().find(object);
+            if (moduleIt != StandardLibrary::instance().getModules().end()) {
+                auto funcIt = moduleIt->second.find(member);
+                if (funcIt != moduleIt->second.end()) {
+                    // Found the standard library function
+                    std::vector<Value> values{};
+                    for (const auto& arg : args) values.push_back(arg->eval(env));
+                    return funcIt->second(values);
+                }
+            }
+        }
+
+        auto classIt{env.classes.find(fullName)};
+        if (classIt != env.classes.end())
+        {
+            const auto* definition{classIt->second};
+            auto obj{std::make_shared<Object>()};
+            obj->className = fullName;
+            for (const auto& field : definition->fields)
+                obj->fields[field->name] = field->initializer ? castToType(field->type, field->initializer->eval(env)) : defaultValue(field->type);
+            std::vector<Value> values{};
+            for (const auto& arg : args) values.push_back(arg->eval(env));
+            if (definition->constructor)
+            {
+                if (definition->constructor->params.size() != values.size() + 1)
+                    throw std::runtime_error("Line " + std::to_string(line) + ": wrong constructor argument count");
+                env.scopes.push_back({});
+                env.declare(definition->constructor->params[0], obj, line);
+                for (std::size_t i{0}; i < values.size(); ++i)
+                    env.declare(definition->constructor->params[i + 1], values[i], line);
+                definition->constructor->call(env);
+            }
+            return obj;
+        }
+        throw std::runtime_error("Line " + std::to_string(line) + ": unknown function or class: " + fullName);
+    }
+    else
+    {
+        if (env.hasVar(fullName))
+            return env.get(fullName);
+        throw std::runtime_error("Line " + std::to_string(line) + ": unknown variable or field: " + fullName);
+    }
 }
 
 void MemberAssignStmt::exec(Environment& env) const
 {
-    Value& receiver{env.get(object)}; if (!std::holds_alternative<ObjectPtr>(receiver)) throw std::runtime_error("Line " + std::to_string(line) + ": member assignment requires an object"); if (!member.empty() && member.front() == '_' && object != "self") throw std::runtime_error("Line " + std::to_string(line) + ": private field: " + member);
-    Value& target{std::get<ObjectPtr>(receiver)->fields.at(member)}; const Value assigned{value->eval(env)}; if (op == "=") { target = assigned; return; } target = BinaryExpr{std::make_unique<LiteralExpr>(target,line),op.substr(0,1),std::make_unique<LiteralExpr>(assigned,line),line}.eval(env);
+    if (env.hasVar(object))
+    {
+        Value& receiver{env.get(object)}; if (!std::holds_alternative<ObjectPtr>(receiver)) throw std::runtime_error("Line " + std::to_string(line) + ": member assignment requires an object"); if (!member.empty() && member.front() == '_' && object != "self") throw std::runtime_error("Line " + std::to_string(line) + ": private field: " + member);
+        Value& target{std::get<ObjectPtr>(receiver)->fields.at(member)}; const Value assigned{value->eval(env)}; if (op == "=") { target = assigned; return; } target = BinaryExpr{std::make_unique<LiteralExpr>(target,line),op.substr(0,1),std::make_unique<LiteralExpr>(assigned,line),line}.eval(env);
+        return;
+    }
+
+    const std::string fullName{object + "." + member};
+    if (env.hasVar(fullName))
+    {
+        Value& target{env.get(fullName)};
+        const Value assigned{value->eval(env)};
+        if (op == "=") { target = assigned; return; }
+        target = BinaryExpr{std::make_unique<LiteralExpr>(target, line), op.substr(0, 1),
+                            std::make_unique<LiteralExpr>(assigned, line), line}.eval(env);
+        return;
+    }
+
+    throw std::runtime_error("Line " + std::to_string(line) + ": unknown variable or field: " + fullName);
 }
 
 void BlockStmt::exec(Environment& env) const
@@ -331,6 +537,10 @@ void DeclStmt::exec(Environment& env) const
     if (!isDynamic)
     {
         env.declare(name, castToType(type, initializer ? initializer->eval(env) : defaultValue(type)), line);
+        if (!env.currentModule.empty() && env.scopes.size() == 1)
+        {
+            env.declare(env.currentModule + "." + name, env.get(name), line);
+        }
         return;
     }
 
@@ -349,6 +559,11 @@ void DeclStmt::exec(Environment& env) const
     case DataType::t_dec:  env.declare(name, buildVec(double{}),      line); break;
     case DataType::t_str:  env.declare(name, buildVec(std::string{}), line); break;
     case DataType::t_bool: env.declare(name, buildVec(bool{}),        line); break;
+    }
+
+    if (!env.currentModule.empty() && env.scopes.size() == 1)
+    {
+        env.declare(env.currentModule + "." + name, env.get(name), line);
     }
 }
 
@@ -459,9 +674,74 @@ void ForStmt::exec(Environment& env) const
 void FunctionDefStmt::exec(Environment& env) const
 {
     env.functions[name] = this;
+    if (!env.currentModule.empty())
+    {
+        env.functions[env.currentModule + "." + name] = this;
+    }
 }
 
-void ClassDefStmt::exec(Environment& env) const { env.classes[name] = this; }
+void ClassDefStmt::exec(Environment& env) const
+{
+    env.classes[name] = this;
+    if (!env.currentModule.empty())
+    {
+        env.classes[env.currentModule + "." + name] = this;
+    }
+}
+
+void ImportStmt::exec(Environment& env) const
+{
+    // Check if this is a standard library module
+    if (fileName == "math") {
+        // Load the math module from standard library
+        if (env.loadedFiles.find("math") != env.loadedFiles.end())
+            return;
+        env.loadedFiles.insert("math");
+
+        StandardLibrary::instance().loadModule("math", env);
+        return;
+    }
+
+    std::filesystem::path path{fileName};
+    if (env.loadedFiles.find(path.string()) != env.loadedFiles.end())
+        return;
+    env.loadedFiles.insert(path.string());
+
+    if (!std::filesystem::exists(path))
+        throw std::runtime_error("Line " + std::to_string(line) + ": could not find imported file: " + fileName);
+
+    std::ifstream file{path};
+    if (!file.is_open())
+        throw std::runtime_error("Line " + std::to_string(line) + ": could not open imported file: " + fileName);
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    file.close();
+
+    const std::string moduleName = path.stem().string();
+    std::vector<Token> tokens = tokenize(buffer.str());
+    Parser parser{tokens};
+    auto statements = parser.parse();
+
+    env.moduleASTs.push_back(std::move(statements));
+    const auto& storedStatements = env.moduleASTs.back();
+
+    std::string previousModule = env.currentModule;
+    env.currentModule = moduleName;
+
+    try
+    {
+        for (const auto& stmt : storedStatements)
+            stmt->exec(env);
+    }
+    catch (...)
+    {
+        env.currentModule = previousModule;
+        throw;
+    }
+
+    env.currentModule = previousModule;
+}
 
 Value FunctionDefStmt::call(Environment& env) const
 {

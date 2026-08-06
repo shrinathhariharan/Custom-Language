@@ -1,0 +1,10 @@
+str message = "Hello, Custom Language!"
+
+int length_result = message.length()
+int size_result = message.size()
+int find_result = message.find("Custom")
+int missing_result = message.find("missing")
+bool contains_result = message.contains("Language")
+bool missing_contains_result = message.contains("missing")
+str lower_result = message.lower()
+str upper_result = message.upper()

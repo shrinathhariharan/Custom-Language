@@ -93,6 +93,7 @@ std::unique_ptr<Stmt> Parser::statement()
     if (check("func"))    return functionStatement();
     if (check("class"))   return classStatement();
     if (check("return"))  return returnStatement();
+    if (check("import"))  return importStatement();
     if (match("break")) { expectNoSemicolon(); return std::make_unique<BreakStmt>(previous().line); }
     if (match("continue")) { expectNoSemicolon(); return std::make_unique<ContinueStmt>(previous().line); }
     if (check("{"))       return block();
@@ -241,6 +242,16 @@ std::unique_ptr<Stmt> Parser::returnStatement()
         val = expression();
     expectNoSemicolon();
     return std::make_unique<ReturnStmt>(std::move(val), line);
+}
+
+std::unique_ptr<Stmt> Parser::importStatement()
+{
+    const std::size_t line{consume("import", "expected 'import'").line};
+    if (peek().type != TokenType::string_lit)
+        throw error("expected file path string after 'import'");
+    const std::string fileName{advance().text};
+    expectNoSemicolon();
+    return std::make_unique<ImportStmt>(fileName, line);
 }
 
 std::unique_ptr<Stmt> Parser::assignmentOrExpressionStatement(bool checkSemicolons)
@@ -398,10 +409,11 @@ std::unique_ptr<Expr> Parser::primary()
             std::vector<std::unique_ptr<Expr>> args{};
             const bool isCall{match("(")};
             if (isCall) { if (!check(")")) do { args.push_back(expression()); } while (match(",")); consume(")", "expected ')' after method arguments"); }
-            if (member.text == "size" || member.text == "push" || member.text == "pop" || member.text == "insert")
+            if (member.text == "size" || member.text == "push" || member.text == "pop" || member.text == "insert" || member.text == "remove" ||
+                member.text == "length" || member.text == "find" || member.text == "contains" || member.text == "lower" || member.text == "upper")
             {
                 if (!isCall)
-                    throw error("array member requires '()'");
+                    throw error("member function requires '()'");
                 return std::make_unique<ArrayMethodCallExpr>(token.text, member.text, std::move(args), token.line);
             }
             return std::make_unique<MemberExpr>(token.text, member.text, std::move(args), isCall, token.line);

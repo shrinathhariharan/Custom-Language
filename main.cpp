@@ -1,6 +1,7 @@
-#include "ast.h"
-#include "lexer.h"
-#include "parser.h"
+#include "src/ast.h"
+#include "src/lexer.h"
+#include "src/parser.h"
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -19,21 +20,17 @@ std::string getValidFile(int argc, char** argv)
     if (argc > 1)
     {
         std::string fileName{argv[1]};
-        std::ifstream filePath{fileName};
-        if (filePath.is_open())
+        if (std::filesystem::exists(fileName))
             return fileName;
         std::cerr << "Error: Could not open file specified in arguments: " << fileName << "\n";
     }
 
     while (true)
     {
-        std::string fileName{getName("Enter your file path for cus language here (.txt): ")};
-        std::ifstream filePath{fileName};
-
-        if (!filePath.is_open())
-            std::cerr << "Error: Could not open the file\n";
-        else
+        std::string fileName{getName("Enter your file path for custom language here (.txt): ")};
+        if (std::filesystem::exists(fileName))
             return fileName;
+        std::cerr << "Error: Could not open the file\n";
     }
 }
 

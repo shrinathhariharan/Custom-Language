@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -49,13 +50,18 @@ struct Environment
     std::vector<std::unordered_map<std::string, Value>> scopes{{}};
     std::unordered_map<std::string, const FunctionDefStmt*> functions{};
     std::unordered_map<std::string, const ClassDefStmt*> classes{};
+    std::unordered_set<std::string> loadedFiles{};
+    std::vector<std::vector<std::unique_ptr<Stmt>>> moduleASTs{};
+    std::string currentModule{};
 
     Value& get(const std::string& name);
     const Value& get(const std::string& name) const;
+    bool hasVar(const std::string& name) const;
     void declare(const std::string& name, Value value, std::size_t line);
 };
 
 std::string typeName(DataType type);
+std::string valueTypeName(const Value& value);
 std::string valueToString(const Value& value);
 double valueToNumber(const Value& value);
 bool valueToBool(const Value& value);
@@ -274,5 +280,14 @@ struct FunctionDefStmt : Stmt
     Value call(Environment& env) const;
 };
 struct ClassDefStmt : Stmt { std::string name{}; std::vector<std::unique_ptr<DeclStmt>> fields{}; std::unique_ptr<FunctionDefStmt> constructor{}; std::unordered_map<std::string,std::unique_ptr<FunctionDefStmt>> methods{}; ClassDefStmt(std::string n,std::size_t l):Stmt{l},name{std::move(n)}{} void exec(Environment&) const override; };
+
+struct ImportStmt : Stmt
+{
+    std::string fileName{};
+    ImportStmt(std::string file, std::size_t lineNum)
+        : Stmt{lineNum}, fileName{std::move(file)} {}
+
+    void exec(Environment& env) const override;
+};
 
 #endif // AST_H

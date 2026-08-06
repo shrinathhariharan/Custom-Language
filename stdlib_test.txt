@@ -1,0 +1,25 @@
+import "math"
+
+dec result = math.pow(2.0, 3.0) //power
+
+dec abs_result = math.abs(-5.5) //absolute value
+
+dec sqrt_result = math.sqrt(16.0) //square root
+
+dec sin_result = math.sin(0.0) //trigonemitric sine
+
+dec cos_result = math.cos(0.0) //trigonemitric cosine
+
+dec tan_result = math.tan(0.0) //trigonemitric tangent
+
+dec log_result = math.log(2.718281828) //logirithimic function with base e
+
+dec log10_result = math.log10(100.0) //logirithmic function with base 10
+
+dec exp_result = math.exp(1.0) //e to the power of x
+
+dec ceil_result = math.ceil(3.2) //ceiling of a number
+
+dec floor_result = math.floor(3.8) //floor of a number
+
+dec round_result = math.round(3.5) //rounds to nearest whole number

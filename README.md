@@ -1,6 +1,6 @@
 # Custom Language
 
-A custom interpreted language implemented in C++. It parses source code using a recursive descent parser into an Abstract Syntax Tree composed of C++ AST node objects (`Expr` and `Stmt`), which are then evaluated in a scoped environment. **Note: Semicolons will cause a parsing error.**
+A custom interpreted language implemented in C++. It parses source code using a recursive descent parser into an Abstract Syntax Tree composed of C++ AST node objects (`Expr` and `Stmt`), which are then evaluated in a scoped environment.
 
 ---
 
@@ -57,6 +57,19 @@ print(numbers)              // [1, 99, 42, 3, 4, 5]
 ```
 
 `push` and `insert` accept an item matching the array's declared type. `pop` reports an error when used on an empty array, and `insert` accepts indexes from `0` through `arr.size()` (inclusive).
+
+### String member functions
+
+Strings provide non-mutating member functions. `lower()` and `upper()` return a transformed string; assign their result to retain it.
+
+```custom
+str message = "Hello World"
+int characterCount = message.length()  // 11; size() is an alias
+int position = message.find("World")  // 6, or -1 when not found
+bool hasHello = message.contains("Hello")
+str lowercase = message.lower()
+str uppercase = message.upper()
+```
 
 ---
 
@@ -134,6 +147,7 @@ print(sum)
 ```
 * Functions create a new nested variable scope upon execution.
 * The `return` statement unwinds execution and returns a value to the caller.
+* `void` functions do not return values
 
 ### 7. Classes and Objects
 
@@ -160,11 +174,28 @@ point.hello()
 point.example += 1
 ```
 
-Use `func void` for a function or method that does not return a value.
+---
+
+### 8. Multi-File Imports
+
+Include other `.txt` source files using the `import` keyword. Functions, classes, and top-level variables defined in imported files are namespaced using the module name (the filename without extension).
+
+```custom
+// helloworld.txt
+func str helloWorld()
+{
+    return "Hello World!"
+}
+
+// main.txt
+import "helloworld.txt"
+
+print(helloworld.helloWorld()) // Outputs "Hello World!"
+```
 
 ---
 
-### 8. Built-in Functions
+### 9. Built-in Functions
 
 #### `print(...)`
 Prints the evaluated string representation of an expression to standard output.
@@ -180,9 +211,53 @@ str name = input("Enter your name: ")
 print("Hello, " + name)
 ```
 
+#### `toInt(value)`
+Converts a value to an `int`. Strings are parsed numerically; booleans become `1` or `0`; decimals are truncated.
+```custom
+int a = toInt("42")     // 42
+int b = toInt(3.99)     // 3  (truncated)
+int c = toInt(true)     // 1
+```
+
+#### `toDec(value)`
+Converts a value to a `dec` (double). Strings are parsed numerically; booleans become `1.0` or `0.0`.
+```custom
+dec a = toDec("3.14")   // 3.14
+dec b = toDec(7)        // 7.0
+dec c = toDec(false)    // 0.0
+```
+
+#### `toStr(value)`
+Converts any value to its string representation (same as the string printed by `print`).
+```custom
+str a = toStr(42)       // "42"
+str b = toStr(true)     // "true"
+str c = toStr(3.14)     // "3.14"
+```
+
+#### `toBool(value)`
+Converts a value to a `bool`.
+* **`int` / `dec`**: `true` if the value is non-zero, `false` if zero.
+* **`str`**: `true` if the string is non-empty, `false` if `""`.
+```custom
+bool a = toBool(1.0)    // true
+bool b = toBool(0)      // false
+bool c = toBool("hi")   // true
+bool d = toBool("")     // false
+```
+
+#### `type(value)`
+Returns the runtime type of a value as a `str`: `"int"`, `"dec"`, `"str"`, `"bool"`, `"array"`, or the class name for objects.
+```custom
+print(type(42))         // int
+print(type(3.14))       // dec
+print(type("hello"))    // str
+print(type(true))       // bool
+```
+
 ---
 
-### 9. Comments & Syntax Rules
+### 10. Comments & Syntax Rules
 * **No Semicolons**: Semicolons (`;`) will throw a compiler error if present.
 * **Single-line Comments**: Start with `//` and ignore all subsequent characters on that line.
 
@@ -190,6 +265,15 @@ print("Hello, " + name)
 // This is a single-line comment
 int x = 5 // Inline comment
 ```
+
+---
+
+### 11. Standard Library
+
+The standard library modules are accessed using dot notation (`.`).
+
+**Supported Libraries:**
+* **math** - `import "math"`
 
 ---
 
@@ -208,7 +292,7 @@ int x = 5 // Inline comment
 Compile using any C++17 compatible compiler (e.g. `g++`):
 
 ```bash
-g++ -std=c++17 -Wall main.cpp lexer.cpp ast.cpp parser.cpp -o custom_language
+g++ -std=c++17 -Wall main.cpp src/lexer.cpp src/ast.cpp src/parser.cpp -o custom_language
 ```
 
 ### 2. Running
@@ -225,5 +309,5 @@ If you run the executable without arguments, it will prompt you for the file pat
 
 ```bash
 ./custom_language
-Enter your file path for custom language here (.txt): your_file.txt
+Enter your file path for custom language here (.txt):
 ```

@@ -43,6 +43,7 @@ private:
     std::unique_ptr<Stmt> functionStatement();
     std::unique_ptr<Stmt> classStatement();
     std::unique_ptr<Stmt> returnStatement();
+    std::unique_ptr<Stmt> importStatement();
     std::unique_ptr<Stmt> assignmentOrExpressionStatement(bool checkSemicolons);
 
     std::unique_ptr<Expr> expression();

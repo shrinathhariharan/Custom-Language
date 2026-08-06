@@ -31,7 +31,7 @@ std::vector<Token> tokenize(const std::string& source)
 
             static const std::vector<std::string> keywords{
                 "int", "dec", "str", "bool", "true", "false", "print", "if",
-                "else", "loop", "while", "for", "func", "return", "input", "break", "continue", "void", "class"
+                "else", "loop", "while", "for", "func", "return", "input", "break", "continue", "void", "class", "import"
             };
             tokens.push_back({std::find(keywords.begin(), keywords.end(), text) == keywords.end() ? TokenType::identifier : TokenType::keyword, text, line});
         }

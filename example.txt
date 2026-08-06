@@ -1,4 +1,4 @@
-// Variable declarations (no semicolons allowed)
+// Variable declarations
 int x = 10
 dec y = 3.14
 str z = "hello"
@@ -27,8 +27,10 @@ print("array size: " + nums.size() + "\n")
 nums.push(6)
 nums.insert(1, 99) // insert takes (index, item)
 print("after push and insert: " + nums + "\n")
-int removed = nums.pop()
-print("popped item: " + removed + "\n")
+nums.remove(99) // removes first occurrence of 99
+print("after removing 99: " + nums + "\n")
+int popped = nums.pop()
+print("popped item: " + popped + "\n")
 print("array size after pop: " + nums.size() + "\n")
 
 str words[] = {"apple", "banana", "cherry"}
@@ -116,3 +118,35 @@ func void printLine(str msg)
 }
 
 printLine("Done!\n")
+
+// Type casting and type inspection
+str numStr = "99"
+int asInt = toInt(numStr)       // "99" -> 99
+dec asDec = toDec(numStr)       // "99" -> 99.0
+bool asBool = toBool(numStr)    // non-empty string -> true
+str backToStr = toStr(asInt)    // 99 -> "99"
+
+print("toInt(\"99\"):  " + asInt + "\n")
+print("toDec(\"99\"):  " + asDec + "\n")
+print("toBool(\"99\"): " + asBool + "\n")
+print("toStr(99):    " + backToStr + "\n")
+
+// toBool rules: 0 and "" are false, everything else is true
+print("toBool(0):    " + toBool(0) + "\n")
+print("toBool(\"\"):   " + toBool("") + "\n")
+print("toBool(3.14): " + toBool(3.14) + "\n")
+
+// type() returns the runtime type name as a string
+int  ti = 1
+dec  td = 1.0
+str  ts = "hi"
+bool tb = false
+print("type(ti): " + type(ti) + "\n")
+print("type(td): " + type(td) + "\n")
+print("type(ts): " + type(ts) + "\n")
+print("type(tb): " + type(tb) + "\n")
+
+// Multi-file imports
+import "math.txt"
+print("math.max(10, 20): " + math.max(10, 20) + "\n")
+
