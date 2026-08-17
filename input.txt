@@ -1,0 +1,6 @@
+func str getInput()
+{
+    str word = input("")
+
+    return word
+}

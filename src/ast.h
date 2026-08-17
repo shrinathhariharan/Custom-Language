@@ -2,6 +2,7 @@
 #define AST_H
 
 #include <cstddef>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -16,6 +17,40 @@ enum class DataType
     t_dec,
     t_str,
     t_bool,
+};
+
+struct NativeData
+{
+    virtual ~NativeData() = default;
+};
+
+struct FileHandle : NativeData
+{
+    std::string path{};
+    std::string mode{};
+    std::fstream stream{};
+    bool isOpen{false};
+
+    FileHandle(const std::string& p, const std::string& m)
+        : path{p}, mode{m}
+    {
+        std::ios_base::openmode openMode = std::ios_base::in | std::ios_base::out;
+        if (mode == "w" || mode == "write")
+            openMode = std::ios_base::out | std::ios_base::trunc;
+        else if (mode == "a" || mode == "append")
+            openMode = std::ios_base::out | std::ios_base::app;
+        else if (mode == "r" || mode == "read")
+            openMode = std::ios_base::in;
+
+        stream.open(path, openMode);
+        isOpen = stream.is_open();
+    }
+
+    ~FileHandle() override
+    {
+        if (stream.is_open())
+            stream.close();
+    }
 };
 
 struct Object;
@@ -43,7 +78,11 @@ struct Stmt
 
 struct FunctionDefStmt;
 struct ClassDefStmt;
-struct Object { std::string className{}; std::unordered_map<std::string, Value> fields{}; };
+struct Object {
+    std::string className{};
+    std::unordered_map<std::string, Value> fields{};
+    std::shared_ptr<NativeData> nativeData{};
+};
 
 struct Environment
 {

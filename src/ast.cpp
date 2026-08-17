@@ -4,6 +4,7 @@
 #include "stdlib.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -222,6 +223,16 @@ Value BinaryExpr::eval(Environment& env) const
     if (op == "-") return valueToNumber(a) - valueToNumber(b);
     if (op == "*") return valueToNumber(a) * valueToNumber(b);
     if (op == "/") return valueToNumber(b) == 0 ? 0.0 : valueToNumber(a) / valueToNumber(b);
+    if (op == "%")
+    {
+        if (std::holds_alternative<int>(a) && std::holds_alternative<int>(b))
+        {
+            const int intB{std::get<int>(b)};
+            return intB == 0 ? 0 : std::get<int>(a) % intB;
+        }
+        const double numB{valueToNumber(b)};
+        return numB == 0.0 ? 0.0 : std::fmod(valueToNumber(a), numB);
+    }
     if (op == ">") return valueToNumber(a) > valueToNumber(b);
     if (op == "<") return valueToNumber(a) < valueToNumber(b);
     if (op == ">=") return valueToNumber(a) >= valueToNumber(b);
@@ -233,6 +244,21 @@ Value BinaryExpr::eval(Environment& env) const
 
 Value ArrayMethodCallExpr::eval(Environment& env) const
 {
+    if (!env.hasVar(arrayName))
+    {
+        if (StandardLibrary::instance().hasModule(arrayName)) {
+            auto moduleIt = StandardLibrary::instance().getModules().find(arrayName);
+            if (moduleIt != StandardLibrary::instance().getModules().end()) {
+                auto funcIt = moduleIt->second.find(method);
+                if (funcIt != moduleIt->second.end()) {
+                    std::vector<Value> values{};
+                    for (const auto& arg : args) values.push_back(arg->eval(env));
+                    return funcIt->second(values);
+                }
+            }
+        }
+    }
+
     Value& array{env.get(arrayName)};
     auto requireArgs = [this](std::size_t count) {
         if (args.size() != count)
@@ -424,6 +450,105 @@ Value MemberExpr::eval(Environment& env) const
     {
         const Value& receiver{env.get(object)}; if (!std::holds_alternative<ObjectPtr>(receiver)) throw std::runtime_error("Line " + std::to_string(line) + ": member access requires an object");
         const auto instance{std::get<ObjectPtr>(receiver)}; if (!member.empty() && member.front() == '_' && object != "self") throw std::runtime_error("Line " + std::to_string(line) + ": private field: " + member);
+
+        if (instance->className == "File" || instance->nativeData)
+        {
+            auto fileHandle = std::dynamic_pointer_cast<FileHandle>(instance->nativeData);
+            if (!fileHandle)
+                throw std::runtime_error("Line " + std::to_string(line) + ": invalid file handle");
+
+            if (member == "write")
+            {
+                if (args.empty())
+                    throw std::runtime_error("Line " + std::to_string(line) + ": write() expects at least 1 argument");
+                if (!fileHandle->stream.is_open())
+                    throw std::runtime_error("Line " + std::to_string(line) + ": file is not open");
+                std::string text = valueToString(args[0]->eval(env));
+                fileHandle->stream << text;
+                return static_cast<int>(text.size());
+            }
+            if (member == "writeLine" || member == "writeline")
+            {
+                if (!fileHandle->stream.is_open())
+                    throw std::runtime_error("Line " + std::to_string(line) + ": file is not open");
+                std::string text = args.empty() ? "" : valueToString(args[0]->eval(env));
+                fileHandle->stream << text << '\n';
+                return static_cast<int>(text.size() + 1);
+            }
+            if (member == "flush")
+            {
+                if (fileHandle->stream.is_open())
+                    fileHandle->stream.flush();
+                return true;
+            }
+            if (member == "close")
+            {
+                if (fileHandle->stream.is_open())
+                {
+                    fileHandle->stream.close();
+                    fileHandle->isOpen = false;
+                }
+                return true;
+            }
+            if (member == "read")
+            {
+                if (!fileHandle->stream.is_open())
+                    throw std::runtime_error("Line " + std::to_string(line) + ": file is not open");
+                if (args.empty())
+                {
+                    std::stringstream ss;
+                    ss << fileHandle->stream.rdbuf();
+                    return ss.str();
+                }
+                else
+                {
+                    int count = static_cast<int>(valueToNumber(args[0]->eval(env)));
+                    if (count <= 0) return std::string{};
+                    std::string buf(count, '\0');
+                    fileHandle->stream.read(&buf[0], count);
+                    std::streamsize bytesRead = fileHandle->stream.gcount();
+                    buf.resize(bytesRead);
+                    return buf;
+                }
+            }
+            if (member == "readLine" || member == "readline")
+            {
+                if (!fileHandle->stream.is_open())
+                    throw std::runtime_error("Line " + std::to_string(line) + ": file is not open");
+                std::string lineStr{};
+                if (std::getline(fileHandle->stream, lineStr))
+                {
+                    if (!lineStr.empty() && lineStr.back() == '\r')
+                        lineStr.pop_back();
+                    return lineStr;
+                }
+                return std::string{};
+            }
+            if (member == "readLines" || member == "readlines")
+            {
+                if (!fileHandle->stream.is_open())
+                    throw std::runtime_error("Line " + std::to_string(line) + ": file is not open");
+                std::vector<std::string> lines{};
+                std::string lineStr{};
+                while (std::getline(fileHandle->stream, lineStr))
+                {
+                    if (!lineStr.empty() && lineStr.back() == '\r')
+                        lineStr.pop_back();
+                    lines.push_back(lineStr);
+                }
+                return lines;
+            }
+            if (member == "eof" || member == "isEof")
+            {
+                return fileHandle->stream.eof() || fileHandle->stream.peek() == EOF;
+            }
+            if (member == "isOpen" || member == "is_open")
+            {
+                return fileHandle->isOpen && fileHandle->stream.is_open();
+            }
+            throw std::runtime_error("Line " + std::to_string(line) + ": unknown File method: " + member);
+        }
+
         if (!isCall) { auto field{instance->fields.find(member)}; if (field == instance->fields.end()) throw std::runtime_error("unknown field: " + member); return field->second; }
         const auto* definition{env.classes.at(instance->className)}; auto method{definition->methods.find(member)}; if (method == definition->methods.end()) throw std::runtime_error("unknown method: " + member);
         if (method->second->params.size() != args.size()) throw std::runtime_error("wrong argument count for method: " + member);
@@ -498,7 +623,7 @@ void MemberAssignStmt::exec(Environment& env) const
     if (env.hasVar(object))
     {
         Value& receiver{env.get(object)}; if (!std::holds_alternative<ObjectPtr>(receiver)) throw std::runtime_error("Line " + std::to_string(line) + ": member assignment requires an object"); if (!member.empty() && member.front() == '_' && object != "self") throw std::runtime_error("Line " + std::to_string(line) + ": private field: " + member);
-        Value& target{std::get<ObjectPtr>(receiver)->fields.at(member)}; const Value assigned{value->eval(env)}; if (op == "=") { target = assigned; return; } target = BinaryExpr{std::make_unique<LiteralExpr>(target,line),op.substr(0,1),std::make_unique<LiteralExpr>(assigned,line),line}.eval(env);
+        Value& target{std::get<ObjectPtr>(receiver)->fields.at(member)}; const Value assigned{value->eval(env)}; if (op == "=") { target = assigned; return; } target = BinaryExpr{std::make_unique<LiteralExpr>(target,line),op.substr(0,op.size() - 1),std::make_unique<LiteralExpr>(assigned,line),line}.eval(env);
         return;
     }
 
@@ -508,7 +633,7 @@ void MemberAssignStmt::exec(Environment& env) const
         Value& target{env.get(fullName)};
         const Value assigned{value->eval(env)};
         if (op == "=") { target = assigned; return; }
-        target = BinaryExpr{std::make_unique<LiteralExpr>(target, line), op.substr(0, 1),
+        target = BinaryExpr{std::make_unique<LiteralExpr>(target, line), op.substr(0, op.size() - 1),
                             std::make_unique<LiteralExpr>(assigned, line), line}.eval(env);
         return;
     }
@@ -584,11 +709,16 @@ void ReturnStmt::exec(Environment& env) const
 
 void AssignStmt::exec(Environment& env) const
 {
+    if (!index && op == "=" && !env.hasVar(name))
+    {
+        env.declare(name, value->eval(env), line);
+        return;
+    }
     Value& target{env.get(name)};
     const Value assigned{value->eval(env)};
     auto apply = [&](const Value& current) -> Value {
         if (op == "=") return assigned;
-        const std::string binaryOp{op.substr(0, 1)};
+        const std::string binaryOp{op.substr(0, op.size() - 1)};
         return BinaryExpr{std::make_unique<LiteralExpr>(current, line), binaryOp,
                           std::make_unique<LiteralExpr>(assigned, line), line}.eval(env);
     };
@@ -692,13 +822,12 @@ void ClassDefStmt::exec(Environment& env) const
 void ImportStmt::exec(Environment& env) const
 {
     // Check if this is a standard library module
-    if (fileName == "math") {
-        // Load the math module from standard library
-        if (env.loadedFiles.find("math") != env.loadedFiles.end())
+    if (StandardLibrary::instance().hasModule(fileName)) {
+        if (env.loadedFiles.find(fileName) != env.loadedFiles.end())
             return;
-        env.loadedFiles.insert("math");
+        env.loadedFiles.insert(fileName);
 
-        StandardLibrary::instance().loadModule("math", env);
+        StandardLibrary::instance().loadModule(fileName, env);
         return;
     }
 

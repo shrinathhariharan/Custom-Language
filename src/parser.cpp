@@ -247,9 +247,11 @@ std::unique_ptr<Stmt> Parser::returnStatement()
 std::unique_ptr<Stmt> Parser::importStatement()
 {
     const std::size_t line{consume("import", "expected 'import'").line};
-    if (peek().type != TokenType::string_lit)
-        throw error("expected file path string after 'import'");
-    const std::string fileName{advance().text};
+    std::string fileName{};
+    if (peek().type == TokenType::string_lit || peek().type == TokenType::identifier)
+        fileName = advance().text;
+    else
+        throw error("expected file path or module name after 'import'");
     expectNoSemicolon();
     return std::make_unique<ImportStmt>(fileName, line);
 }
@@ -269,9 +271,9 @@ std::unique_ptr<Stmt> Parser::assignmentOrExpressionStatement(bool checkSemicolo
         if (match("."))
         {
             const Token member{consumeIdentifier("expected member name after '.'")};
-            if (match("=") || match("+=") || match("-=") || match("*=") || match("/=")) { const std::string op{previous().text}; auto value{expression()}; if (checkSemicolons) expectNoSemicolon(); return std::make_unique<MemberAssignStmt>(name.text, member.text, op, std::move(value), name.line); }
+            if (match("=") || match("+=") || match("-=") || match("*=") || match("/=") || match("%=")) { const std::string op{previous().text}; auto value{expression()}; if (checkSemicolons) expectNoSemicolon(); return std::make_unique<MemberAssignStmt>(name.text, member.text, op, std::move(value), name.line); }
         }
-        if (match("=") || match("+=") || match("-=") || match("*=") || match("/="))
+        if (match("=") || match("+=") || match("-=") || match("*=") || match("/=") || match("%="))
         {
             const std::string op{previous().text};
             auto value{expression()};
@@ -349,7 +351,7 @@ std::unique_ptr<Expr> Parser::term()
 std::unique_ptr<Expr> Parser::factor()
 {
     auto expr{unary()};
-    while (match("*") || match("/"))
+    while (match("*") || match("/") || match("%"))
     {
         const std::string op{previous().text};
         expr = std::make_unique<BinaryExpr>(std::move(expr), op, unary(), previous().line);

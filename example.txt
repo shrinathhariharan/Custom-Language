@@ -147,6 +147,6 @@ print("type(ts): " + type(ts) + "\n")
 print("type(tb): " + type(tb) + "\n")
 
 // Multi-file imports
-import "math.txt"
-print("math.max(10, 20): " + math.max(10, 20) + "\n")
+import "input.txt"
+print(input.getInput())
 

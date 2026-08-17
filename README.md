@@ -76,21 +76,22 @@ str uppercase = message.upper()
 ### 4. Operators & Expressions
 Supported arithmetic, comparison, logical, and string operations with standard operator precedence:
 
-* **Arithmetic Operators**: `+`, `-`, `*`, `/`, unary `-`
+* **Arithmetic Operators**: `+`, `-`, `*`, `/`, `%`, unary `-`
   * String concatenation is automatically supported with `+` if either operand is a string (e.g., `"Value: " + 10`).
-  * Division by zero returns `0.0` safely.
+  * Division by zero returns `0.0` safely; modulo by zero returns `0` (or `0.0`).
 * **Comparison Operators**: `>`, `<`, `>=`, `<=`, `==`, `!=`
 * **Logical Operators**: `&&`, `||`, `!` (short-circuiting)
-* **Compound Assignment Operators**: `+=`, `-=`, `*=`, `/=` (also supported for array elements)
+* **Compound Assignment Operators**: `+=`, `-=`, `*=`, `/=`, `%=` (also supported for array elements)
 * **Parentheses**: `(` and `)` for overriding operator precedence.
 
 ```custom
 int score = 10
 score += 5       // 15
-score *= 2       // 30
+score %= 4       // 3
+score *= 2       // 6
 
 int values[] = {4, 8}
-values[1] /= 2   // [4, 4]
+values[1] %= 5   // [4, 3]
 
 bool allowed = score >= 30 && !false
 bool fallback = false || allowed
@@ -270,10 +271,10 @@ int x = 5 // Inline comment
 
 ### 11. Standard Library
 
-The standard library modules are accessed using dot notation (`.`).
+Standard library modules can be imported using `import module` or `import "module"`, and their members are accessed using dot notation (`.`).
 
-**Supported Libraries:**
-* **math** - `import "math"`
+* **`math`** &rarr; See [`stdlib_functions/mathlib.txt`](file:///c:/Users/shrin/OneDrive/Desktop/coding/.vscode/CppProjects/CustomLanguage/stdlib_functions/mathlib.txt) for function reference and examples.
+* **`io`** &rarr; See [`stdlib_functions/iolib.txt`](file:///c:/Users/shrin/OneDrive/Desktop/coding/.vscode/CppProjects/CustomLanguage/stdlib_functions/iolib.txt) for file stream reference and examples.
 
 ---
 
@@ -292,22 +293,12 @@ The standard library modules are accessed using dot notation (`.`).
 Compile using any C++17 compatible compiler (e.g. `g++`):
 
 ```bash
-g++ -std=c++17 -Wall main.cpp src/lexer.cpp src/ast.cpp src/parser.cpp -o custom_language
+g++ -std=c++17 -Wall src/main.cpp src/lexer.cpp src/ast.cpp src/parser.cpp src/stdlib.cpp -o custom_language
 ```
 
 ### 2. Running
-
-#### Option A: Pass file directly in command
-You can easily copy and run the executable directly followed by your `.txt` file path:
+Run the executable by passing your `.txt` source file:
 
 ```bash
 ./custom_language your_file.txt
-```
-
-#### Option B: Interactive prompt
-If you run the executable without arguments, it will prompt you for the file path:
-
-```bash
-./custom_language
-Enter your file path for custom language here (.txt):
 ```

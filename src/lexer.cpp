@@ -87,7 +87,7 @@ std::vector<Token> tokenize(const std::string& source)
             {
                 const std::string two{source.substr(i, 2)};
                 if (two == "==" || two == "!=" || two == ">=" || two == "<=" ||
-                    two == "+=" || two == "-=" || two == "*=" || two == "/=" ||
+                    two == "+=" || two == "-=" || two == "*=" || two == "/=" || two == "%=" ||
                     two == "&&" || two == "||")
                     text = two;
             }

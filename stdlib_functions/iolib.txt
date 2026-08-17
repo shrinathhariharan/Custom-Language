@@ -1,0 +1,33 @@
+import io
+
+// writing to a file (creates or overwrites)
+my_file = io.write("output.txt")
+my_file.write("Hello World\n") // writes text to file
+my_file.writeLine("Second line of text") // writes line with newline
+my_file.flush() // flushes stream buffer
+my_file.close() // closes file stream
+
+// reading from a file
+in_file = io.read("output.txt")
+str content = in_file.read() // reads entire file content
+in_file.close()
+
+// reading line-by-line
+in_file2 = io.read("output.txt")
+str line1 = in_file2.readLine() // reads single line
+str line2 = in_file2.readLine()
+in_file2.close()
+
+// reading all lines into a dynamic array
+in_file3 = io.read("output.txt")
+lines = in_file3.readLines() // reads all lines into dynamic array
+in_file3.close()
+
+// appending to a file
+app_file = io.append("output.txt")
+app_file.write("Appended content\n")
+app_file.close()
+
+// file checking and removal
+bool exists = io.exists("output.txt") // checks if file exists on disk
+bool removed = io.remove("output.txt") // deletes file from disk
