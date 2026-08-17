@@ -67,8 +67,8 @@ point.hello()
 print("public field: " + point.example + "\n")
 
 // Interactive input
-str user_name = input("Enter your name: ")
-print("Hello, " + user_name + "\n")
+str userName = input("Enter your name: ")
+print("Hello, " + userName + "\n")
 
 // Functions with return values
 func int add(int a, int b) 

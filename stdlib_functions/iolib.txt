@@ -1,32 +1,32 @@
 import io
 
-// writing to a file (creates or overwrites)
-my_file = io.write("output.txt")
-my_file.write("Hello World\n") // writes text to file
-my_file.writeLine("Second line of text") // writes line with newline
-my_file.flush() // flushes stream buffer
-my_file.close() // closes file stream
+// writes to a file (creates or overwrites)
+myFile = io.write("output.txt")
+myFile.write("Hello World\n") // writes text to file
+myFile.writeLine("Second line of text") // writes line with newline
+myFile.flush() // flushes stream buffer
+myFile.close() // closes file stream
 
-// reading from a file
-in_file = io.read("output.txt")
-str content = in_file.read() // reads entire file content
-in_file.close()
+// reads from a file
+inFile = io.read("output.txt")
+str content = inFile.read() // reads entire file content
+inFile.close()
 
 // reading line-by-line
-in_file2 = io.read("output.txt")
-str line1 = in_file2.readLine() // reads single line
-str line2 = in_file2.readLine()
-in_file2.close()
+inFile2 = io.read("output.txt")
+str line1 = inFile2.readLine() // reads single line
+str line2 = inFile2.readLine()
+inFile2.close()
 
 // reading all lines into a dynamic array
-in_file3 = io.read("output.txt")
-lines = in_file3.readLines() // reads all lines into dynamic array
-in_file3.close()
+inFile3 = io.read("output.txt")
+lines = inFile3.readLines() // reads all lines into dynamic array
+inFile3.close()
 
 // appending to a file
-app_file = io.append("output.txt")
-app_file.write("Appended content\n")
-app_file.close()
+appFile = io.append("output.txt")
+appFile.write("Appended content\n")
+appFile.close()
 
 // file checking and removal
 bool exists = io.exists("output.txt") // checks if file exists on disk
